@@ -1,0 +1,282 @@
+import pandas as pd
+from elasticsearch import Elasticsearch
+from elasticsearch import helpers
+
+es_servers = [{
+            "host": "192.168.20.72",
+            "port": "9200"
+        },
+        {
+            "host": "192.168.20.73",
+            "port": "9200"
+        },
+        {
+            "host": "192.168.20.74",
+            "port": "9200"
+        },
+        {
+            "host": "192.168.20.75",
+            "port": "9200"
+        },
+        {
+            "host": "192.168.20.76",
+            "port": "9200"
+        }]
+
+# es_servers = [{
+#             "host": "10.8.1.8",
+#             "port": "9200"
+#         }]
+
+def gen(data):
+    """ 使用生成器批量写入数据 """
+    action = ({
+        "_index": "judgement_result",
+        "_type": "_doc",
+        # "_id": str(data[i][11])+"_"+str(data[i][1]),
+        "_id": str(data[i][11]),
+        "_source": {
+            "title": str(data[i][0]),
+            # "key_word": str(data[i][1]),
+            "content": str(data[i][2]),
+            "source": str(data[i][3]),
+            "url": str(data[i][4]),
+            # "publish_time": str(data[i][5]),
+            "publish_time": data[i][5],
+            "create_time": str(data[i][6]),
+            "raw_content": str(data[i][7]),
+            "case_id": str(data[i][8]),
+            "case_reason": str(data[i][9]),
+            "court_name": str(data[i][10]),
+            "docid": str(data[i][11]),
+            "doctype": str(data[i][12]),
+            "effect_hierarchy": str(data[i][13]),
+            "judge_date": str(data[i][14]),
+            "court_province": str(data[i][15]),
+            "court_city": str(data[i][16]),
+            "court_country": str(data[i][17]),
+            "court_area": str(data[i][18]),
+            "encase_type": str(data[i][19]),
+            "update_time": str(data[i][20]),
+            "source_type": str(data[i][21]),
+            "abstract": str(data[i][22]),
+            "picked_abstract": str(data[i][23]),
+            "sentiment_type": str(data[i][24]),
+            "sentiment_score": str(data[i][25]),
+            "accuser": str(data[i][26]),
+            "defendant": str(data[i][27]),
+            "amount_of_fund": str(data[i][28]),
+            "case_reason2": str(data[i][29]),
+            "doctype2": str(data[i][30]),
+            "district": str(data[i][31]),
+            "level": str(data[i][31]),
+            "province": str(data[i][33]),
+            "city": str(data[i][34]),
+            "other_info": str(data[i][35]),
+            "company_name": str(data[i][36]),
+            "company_name_title": str(data[i][37]),
+            "other_name": str(data[i][38]),
+            "case_type": str(data[i][39]),
+            "judge_process": str(data[i][40])
+        }
+    } for i in range(len(data)))
+    helpers.bulk(es, action)
+
+def get_page_data(result):
+    data = []
+    for hit in result:
+        a = hit["_id"].split("_")
+        # print(a)
+        if a:
+            docid = a[0]
+            if pd.isnull(docid) or docid == "":
+                docid = 'qjd202108'
+        source = hit["_source"]
+
+        publish_time = source["publish_time"]
+        if ':' not in publish_time:
+            publish_time = publish_time + ' 00:00:00'
+        elif "T" in publish_time:
+            publish_time = "0001-01-01 01:01:01"
+
+        judge_date = source["judge_date"]
+        if ':' not in judge_date:
+            judge_date = judge_date + ' 00:00:00'
+        elif "T" in judge_date:
+            judge_date = "0001-01-01 01:01:01"
+
+        data.append((source["title"],
+            source["key_word"],
+            source["content"],
+            source["source"],
+            source["url"],
+            # source["publish_time"],
+            publish_time,
+            source["create_time"],
+            source["raw_content"],
+            source["case_id"],
+            source["case_reason"],
+            source["court_name"],
+            # source["docid"],
+            docid,
+            source["doctype"],
+            source["effect_hierarchy"],
+            # source["judge_date"],
+            judge_date,
+            source["court_province"],
+            source["court_city"],
+            source["court_country"],
+            source["court_area"],
+            source["encase_type"],
+            source["update_time"],
+            source["source_type"],
+            source["abstract"],
+            source["picked_abstract"],
+            source["sentiment_type"],
+            source["sentiment_score"],
+            source["accuser"],
+            source["defendant"],
+            source["amount_of_fund"],
+            source["case_reason2"],
+            source["doctype2"],
+            source["district"],
+            source["level"],
+            source["province"],
+            source["city"],
+            source["other_info"],
+            source["company_name"],
+            source["company_name_title"],
+            source["other_name"],
+            source["case_type"],
+            source["judge_process"]
+                     ))
+    print("数据长度：",len(data))
+    # print(data)
+    try:
+        gen(data)
+    except:
+        print("======")
+        pass
+
+
+page_line = 1000
+es = Elasticsearch(es_servers, timeout=1000, max_retries=3, retry_on_timeout=True)
+index="judgement_doc_analysis_result"
+count = es.count(index=index)["count"]
+print(count)
+if (count % page_line == 0):
+    page = (int) (count/page_line)
+else:
+    page = (int)(count/page_line + 1)
+# body={"query": {
+#                    "match_all": {}
+#                }
+#               }
+# rs = helpers.scan(
+#         client=es,
+#         query={"query": {
+#                    "match_all": {}
+#                }
+#               },
+#         scroll='5m',
+#         index='judgement_analysis_result',
+#         doc_type='_doc',
+#         timeout='1m'
+#
+#     )
+# get_page_data(rs)
+
+for x in range(page):
+    rs = es.search(index=index, body={
+        "query": {
+            "match_all": {}
+        },
+        "from": x * page_line,
+        "size": page_line
+    })
+    # rs = es.search(index=index, body={
+    #     "query": {
+    #         "match_all": {}
+    #     }
+    # })
+
+    # rs = helpers.scan(
+    #     client=es,
+    #     query={"query": {
+    #                "match_all": {}
+    #            }
+    #           },
+    #     scroll='5m',
+    #     index='judgement_analysis_result',
+    #     doc_type='_doc',
+    #     timeout='1m'
+    #
+    # )
+    get_page_data(rs["hits"]["hits"])
+
+# def get_search_result(es, index, scroll='15m', timeout='10m', size=1000):
+#     body = {"query": {
+#         "match_all": {}
+#     },
+#         "from": 1,
+#     }
+#
+#     queryData = es.search(
+#         index=index,
+#         doc_type="_doc",
+#         scroll=scroll,
+#         timeout=timeout,
+#         size=size,
+#         body=body
+#     )
+#
+#
+#     # mdata = queryData.get("hits").get("hits")
+#
+#     # if not mdata:
+#     #     print('empty')
+#     # else:
+#     #     get_page_data(mdata)
+#     # print('n:   ', n)
+#     scroll_id = queryData["_scroll_id"]
+#     # print("scroll_id:   ",len(scroll_id))
+#     # total = queryData["hits"]["total"]["value"]
+#     # print("total:   ", total)
+#     for i in range(int(count / 1000)):
+#         if i < 250:
+#             continue
+#
+#         body = {"query": {
+#             "match_all": {}
+#         },
+#             "from": i * 1000,
+#         }
+#
+#         queryData = es.search(
+#             index=index,
+#             doc_type="_doc",
+#             scroll=scroll,
+#             timeout=timeout,
+#             size=size,
+#             body=body
+#         )
+#
+#         print("i:", i)
+#         res = es.scroll(scroll_id=scroll_id, scroll='15m')
+#         # print('res: ',len(res))
+#         get_page_data(res["hits"]["hits"])
+#         # mdata = mdata + res["hits"]["hits"]
+#         # print('last:    ',len(mdata))
+#         # n = n + len(res)
+#         # print(n)
+#     # return mdata
+#     return ""
+#
+# result = get_search_result(es, index)
+# get_page_data(result)
+
+# items = allDoc["hits"]["hits"]
+# for i in items:
+#     print(i["_source"])
+
+# res = es.indices.delete("judgement_analysis_result")  # 删除索引
